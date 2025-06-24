@@ -1,0 +1,2163 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+-- ننتظر لين يتجهز اللاعب
+repeat task.wait() until Players.LocalPlayer
+
+local player = Players.LocalPlayer
+local success, result = pcall(function()
+    return player:GetMouse()
+end)
+
+local mouse = success and result or nil
+
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+local Window = Fluent:CreateWindow({
+    Title = "AstaRoth",
+    SubTitle = "Attack on Titan: Revolution ( Paid Version )",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = false,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+-- ✅ إضافة System Tray Icon
+local TrayIcon = {}
+TrayIcon.isVisible = true
+TrayIcon.connection = nil
+
+-- إنشاء الأيقونة في أعلى يمين الشاشة
+function TrayIcon:CreateIcon()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "TrayIconGui"
+    screenGui.ResetOnSpawn = false
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    -- حماية من الحذف
+    screenGui.Parent = game:GetService("CoreGui")
+    
+    local iconFrame = Instance.new("Frame")
+    iconFrame.Name = "TrayIcon"
+    iconFrame.Size = UDim2.new(0, 50, 0, 50)
+    iconFrame.Position = UDim2.new(1, -60, 0, 10)
+    iconFrame.BackgroundColor3 = Color3.fromRGB(0, 120, 212)
+    iconFrame.BorderSizePixel = 0
+    iconFrame.Parent = screenGui
+    
+    -- إضافة تأثير الدائرة
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0.5, 0)
+    corner.Parent = iconFrame
+    
+    -- إضافة النص
+    local iconText = Instance.new("TextLabel")
+    iconText.Size = UDim2.new(1, 0, 1, 0)
+    iconText.Position = UDim2.new(0, 0, 0, 0)
+    iconText.BackgroundTransparency = 1
+    iconText.Text = "A"
+    iconText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    iconText.TextScaled = true
+    iconText.Font = Enum.Font.GothamBold
+    iconText.Parent = iconFrame
+    
+    -- إضافة تأثير الهوفر
+    local hoverTween = nil
+    iconFrame.MouseEnter:Connect(function()
+        if hoverTween then hoverTween:Cancel() end
+        hoverTween = TweenService:Create(iconFrame, 
+            TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {Size = UDim2.new(0, 55, 0, 55), BackgroundColor3 = Color3.fromRGB(16, 110, 190)}
+        )
+        hoverTween:Play()
+    end)
+    
+    iconFrame.MouseLeave:Connect(function()
+        if hoverTween then hoverTween:Cancel() end
+        hoverTween = TweenService:Create(iconFrame,
+            TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {Size = UDim2.new(0, 50, 0, 50), BackgroundColor3 = Color3.fromRGB(0, 120, 212)}
+        )
+        hoverTween:Play()
+    end)
+    
+    -- وظيفة النقر
+    local clickDetector = Instance.new("TextButton")
+    clickDetector.Size = UDim2.new(1, 0, 1, 0)
+    clickDetector.Position = UDim2.new(0, 0, 0, 0)
+    clickDetector.BackgroundTransparency = 1
+    clickDetector.Text = ""
+    clickDetector.Parent = iconFrame
+    
+    clickDetector.MouseButton1Click:Connect(function()
+        self:ToggleUI()
+        
+        -- تأثير النقر
+        local clickTween = TweenService:Create(iconFrame,
+            TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut),
+            {Size = UDim2.new(0, 45, 0, 45)}
+        )
+        clickTween:Play()
+        clickTween.Completed:Connect(function()
+            local returnTween = TweenService:Create(iconFrame,
+                TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut),
+                {Size = UDim2.new(0, 50, 0, 50)}
+            )
+            returnTween:Play()
+        end)
+    end)
+    
+    self.gui = screenGui
+    self.frame = iconFrame
+    self.text = iconText
+    
+    -- إضافة tooltip
+    self:CreateTooltip()
+end
+
+-- إنشاء tooltip
+function TrayIcon:CreateTooltip()
+    local tooltip = Instance.new("Frame")
+    tooltip.Name = "Tooltip"
+    tooltip.Size = UDim2.new(0, 200, 0, 30)
+    tooltip.Position = UDim2.new(1, -210, 0.5, -15)
+    tooltip.BackgroundColor3 = Color3.fromRGB(32, 32, 32)
+    tooltip.BorderSizePixel = 0
+    tooltip.Visible = false
+    tooltip.Parent = self.frame
+    
+    local tooltipCorner = Instance.new("UICorner")
+    tooltipCorner.CornerRadius = UDim.new(0, 5)
+    tooltipCorner.Parent = tooltip
+    
+    local tooltipText = Instance.new("TextLabel")
+    tooltipText.Size = UDim2.new(1, -10, 1, 0)
+    tooltipText.Position = UDim2.new(0, 5, 0, 0)
+    tooltipText.BackgroundTransparency = 1
+    tooltipText.Text = "Click to toggle UI visibility"
+    tooltipText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tooltipText.TextScaled = true
+    tooltipText.Font = Enum.Font.Gotham
+    tooltipText.Parent = tooltip
+    
+    self.frame.MouseEnter:Connect(function()
+        tooltip.Visible = true
+    end)
+    
+    self.frame.MouseLeave:Connect(function()
+        tooltip.Visible = false
+    end)
+end
+
+-- تبديل حالة الـ UI
+function TrayIcon:ToggleUI()
+    if self.isVisible then
+        self:HideUI()
+    else
+        self:ShowUI()
+    end
+end
+
+-- إخفاء الـ UI
+function TrayIcon:HideUI()
+    if Window and Window.Root then
+        Window.Root.Visible = false
+        self.isVisible = false
+        self.text.Text = "H" -- H for Hidden
+        self.frame.BackgroundColor3 = Color3.fromRGB(220, 53, 69) -- أحمر
+        
+        -- إشعار
+        Fluent:Notify({
+            Title = "UI Hidden",
+            Content = "Click the tray icon to show UI again",
+            Duration = 3
+        })
+    end
+end
+
+-- إظهار الـ UI
+function TrayIcon:ShowUI()
+    if Window and Window.Root then
+        Window.Root.Visible = true
+        self.isVisible = true
+        self.text.Text = "A" -- A for Astaroth
+        self.frame.BackgroundColor3 = Color3.fromRGB(0, 120, 212) -- أزرق
+        
+        -- إشعار
+        Fluent:Notify({
+            Title = "UI Shown",
+            Content = "UI is now visible",
+            Duration = 2
+        })
+    end
+end
+
+-- تشغيل الأيقونة
+TrayIcon:CreateIcon()
+
+local Tabs = {
+    Main = Window:AddTab({ Title = "Main(Risky)", Icon = "" }),
+    Ts = Window:AddTab({ Title = "Thunder Spears(Risky)", Icon = "" }),
+    Misc = Window:AddTab({ Title = "Misc", Icon = "" }),
+    Raids = Window:AddTab({ Title = "Raids", Icon = "" }),
+    AutoMission = Window:AddTab({ Title = "Auto Mission" }),
+    Modifiers = Window:AddTab({ Title = "Modifiers" }),
+    Webhook = Window:AddTab({ Title = "Webhook", Icon = "" }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "" }),
+    SafeFeatures = Window:AddTab({ Title = "Safe Features", Icon = "" })
+}
+
+-- إضافة toggle للأيقونة في تاب الإعدادات
+Tabs.Settings:AddToggle("TrayIconToggle", {
+    Title = "Show Tray Icon",
+    Description = "Show/Hide the system tray icon",
+    Default = true,
+    Callback = function(state)
+        if TrayIcon.gui then
+            TrayIcon.gui.Enabled = state
+        end
+    end
+})
+
+-- إضافة معلومات في تاب الإعدادات
+Tabs.Settings:AddParagraph({
+    Title = "Tray Icon Usage",
+    Content = "• The tray icon appears in the top-right corner\n• Click it to hide/show the UI\n• Red icon = UI hidden, Blue icon = UI visible\n• Use Ctrl+L to minimize (default Fluent key)"
+})
+
+-- ✅ بعدها على طول، تحقق من الـ PlaceId وأضف Mainmenu إذا كنا في المكان الصحيح
+local allowedPlaceId = 13379208636
+
+if game.PlaceId == allowedPlaceId then
+    Tabs.Mainmenu = Window:AddTab({ Title = "Mainmenu", Icon = "" })
+
+    Tabs.Mainmenu:AddToggle("AutoRollToggle", {
+        Title = "Auto Roll",
+        Default = false,
+        Callback = function(state)
+            ENABLED = state
+        end
+    })
+end
+
+-- إضافة hotkey للتبديل السريع
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    -- Ctrl + H للتبديل
+    if input.KeyCode == Enum.KeyCode.H and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+        TrayIcon:ToggleUI()
+    end
+end)
+
+-- حماية من الحذف عند إعادة التحميل
+game.Players.PlayerRemoving:Connect(function(plr)
+    if plr == player and TrayIcon.gui then
+        TrayIcon.gui:Destroy()
+    end
+end)
+
+
+
+--------------------------------------------------------------------------
+
+-- ✅ Toggle لإخفاء الواجهة تلقائياً بعد 10 ثواني
+getgenv().AutoHideAfterDelay = false
+
+Tabs.Misc:AddToggle("AutoHideAfter10s", {
+    Title = "Auto Hide UI (5s)",
+    Default = false,
+    Callback = function(state)
+        getgenv().AutoHideAfterDelay = state
+        if state then
+            task.delay(5, function()
+                if not getgenv().AutoHideAfterDelay then return end
+                getgenv().AutoHideUI = true
+
+                Window:Minimize()
+            end)
+        end
+    end
+})
+
+-- ✅ دعم الجوال: الضغط مرتين على الشاشة لفتح/إغلاق الواجهة
+local UserInputService = game:GetService("UserInputService")
+local lastTap = 0
+
+local function toggleUI()
+    if Window._minimized then
+        Window:Open()
+    else
+        Window:Minimize()
+    end
+end
+
+UserInputService.TouchTap:Connect(function(_, gameProcessed)
+    if gameProcessed then return end
+    local now = tick()
+    if now - lastTap <= 0.4 then
+        toggleUI()
+    end
+    lastTap = now
+end)
+
+
+local scriptUrl = "https://pastebin.com/DekzNMAu"
+
+local function getScript()
+	if game.HttpGetAsync then
+		return game:HttpGetAsync(scriptUrl)
+	else
+		return game:HttpGet(scriptUrl)
+	end
+end
+
+local function run()
+	task.spawn(function()
+		waitForGameLoaded(10) -- 10 ثواني مهلة
+
+		local success, err = pcall(function()
+			local code = getScript()
+			assert(code and code ~= "")
+			local func = loadstring(code)
+			assert(func)
+			func()
+		end)
+
+		if success then
+			print("Script executed successfully!")
+		else
+			warn("Error running script:", err)
+		end
+	end)
+end
+
+local function queueScript()
+	local queueCode = string.format([[
+        spawn(function()
+            repeat wait() until game:IsLoaded()
+            local success, err = pcall(function()
+                local code
+                if game.HttpGetAsync then
+                    code = game:HttpGetAsync("%s")
+                else
+                    code = game:HttpGet("%s")
+                end
+                assert(code and code ~= "", "Failed to fetch script")
+                local func = loadstring(code)
+                assert(func, "Failed to compile script")
+                func()
+            end)
+            if not success then
+                warn("Auto-execute on teleport/rejoin failed:", err)
+            end
+        end)
+    ]], scriptUrl, scriptUrl)
+
+	if syn and syn.queue_on_teleport then
+		syn.queue_on_teleport(queueCode)
+	elseif queue_on_teleport then
+		queue_on_teleport(queueCode)
+	elseif fluxus and fluxus.queue_on_teleport then
+		fluxus.queue_on_teleport(queueCode)
+	elseif SecureLoad and SecureLoad.queue_on_teleport then
+		SecureLoad.queue_on_teleport(queueCode)
+	else
+		warn("Your executor does not support queue_on_teleport.")
+	end
+end
+
+-- 🔘 ربطه بزر Toggle في Fluent
+Tabs.Misc:AddToggle("AutoExec", {
+	Title = "Auto Execute Script",
+	Default = false,
+	Callback = function(state)
+		if state then
+			run()
+			queueScript()
+			Fluent:Notify({
+				Title = "Auto Execute",
+				Content = "Script started and queued for teleport.",
+				Duration = 4
+			})
+		else
+			Fluent:Notify({
+				Title = "Auto Execute",
+				Content = "Toggle turned off. Script won't auto-run.",
+				Duration = 4
+			})
+		end
+	end
+})
+
+
+Window:SelectTab(Tabs.Main)
+
+
+
+--============[ ⚙️. Settings ]========--
+
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local interface = player:WaitForChild("PlayerGui"):WaitForChild("Interface")
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local VirtualInput = game:GetService("VirtualInputManager")
+
+local player = Players.LocalPlayer
+local char = player.Character or player.CharacterAdded:Wait()
+local hrp = char:WaitForChild("HumanoidRootPart")
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local retryRemote = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("Remotes"):WaitForChild("GET")
+
+local TeleportService = game:GetService("TeleportService")
+
+local isFlying = false
+local bodyPos
+
+local LocalPlayer = Players.LocalPlayer
+
+local startDelay = 5 -- ستارت ديلاي
+
+local flyHeight = 250 -- الارتفاع للل ts + blades
+
+--//==============================\\--
+--||      👑 AUTO KILL TITANS     ||--
+--\\==============================//--
+-- تجميع جميع المتغيرات في جداول لتوفير الـ registers
+local Services = {
+    Players = game:GetService("Players"),
+    RunService = game:GetService("RunService"),
+    ReplicatedStorage = game:GetService("ReplicatedStorage"),
+    TweenService = game:GetService("TweenService"),
+    CoreGui = game:GetService("CoreGui")
+}
+
+local Player = {
+    self = Services.Players.LocalPlayer,
+    character = nil,
+    hrp = nil,
+    gui = nil
+}
+
+local Config = {
+    flySpeed = 250,
+    canHit = true,
+    isFlying = false,
+    moveMode = "Teleportation",
+    notificationsEnabled = true,
+    startDelay = 5,
+    flyHeight = 250,
+    titanKillCount = 0,
+    autoRefill = false,
+    lastBladesEmpty = false,
+    lastSpearsEmpty = false
+}
+
+local Data = {
+    notified = {},
+    activeNotifs = {},
+    POST = nil,
+    refill = nil
+}
+
+-- تحديث بيانات اللاعب
+Player.character = Player.self.Character or Player.self.CharacterAdded:Wait()
+Player.hrp = Player.character:WaitForChild("HumanoidRootPart")
+Player.gui = Player.self:WaitForChild("PlayerGui")
+
+-- تحميل POST
+task.spawn(function()
+    local success, result = pcall(function()
+        return Services.ReplicatedStorage:WaitForChild("Assets", 10):WaitForChild("Remotes", 10):WaitForChild("POST", 10)
+    end)
+    Data.POST = success and result or nil
+end)
+
+-- دالة الإشعارات
+function showKillNotification(count)
+    if not Config.notificationsEnabled then return end
+    
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "TN_" .. tick()
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
+    gui.Parent = Services.CoreGui
+    
+    local frame = Instance.new("Frame", gui)
+    frame.Size = UDim2.new(0, 190, 0, 75)
+    frame.Position = UDim2.new(1, 20, 0, 10 + (#Data.activeNotifs * 80))
+    frame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    frame.BorderSizePixel = 2
+    frame.BorderColor3 = Color3.fromRGB(184, 164, 101)
+    
+    local label = Instance.new("TextLabel", frame)
+    label.Size = UDim2.new(0.65, 0, 1, 0)
+    label.Position = UDim2.new(0, 5, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = "Successfully\nHit:"
+    label.TextColor3 = Color3.fromRGB(184, 164, 101)
+    label.Font = Enum.Font.Fantasy
+    label.TextScaled = true
+    
+    local counter = Instance.new("TextLabel", frame)
+    counter.Size = UDim2.new(0, 60, 0.5, 0)
+    counter.Position = UDim2.new(1, -65, 0, 0)
+    counter.BackgroundTransparency = 1
+    counter.Text = tostring(count)
+    counter.TextColor3 = Color3.fromRGB(255, 255, 255)
+    counter.Font = Enum.Font.Fantasy
+    counter.TextScaled = true
+    
+    table.insert(Data.activeNotifs, gui)
+    
+    Services.TweenService:Create(frame, TweenInfo.new(0.35), {
+        Position = UDim2.new(1, -210, 0, 10 + ((#Data.activeNotifs - 1) * 80))
+    }):Play()
+    
+    task.delay(5, function()
+        gui:Destroy()
+        for i, v in ipairs(Data.activeNotifs) do
+            if v == gui then
+                table.remove(Data.activeNotifs, i)
+                break
+            end
+        end
+    end)
+end
+
+-- العثور على أقرب نيب
+function getClosestValidNape()
+    local titansFolder = workspace:FindFirstChild("Titans")
+    if not titansFolder then return nil end
+    
+    local priorityList = {"Attack_Titan", "Female_Titan", "Armored_Titan"}
+    
+    for _, titanName in ipairs(priorityList) do
+        local titan = titansFolder:FindFirstChild(titanName)
+        if titan and titan:FindFirstChild("Humanoid") and titan.Humanoid.Health > 0 then
+            local nape = titan:FindFirstChild("Hitboxes") and titan.Hitboxes:FindFirstChild("Hit") and titan.Hitboxes.Hit:FindFirstChild("Nape")
+            if nape then return nape end
+        end
+    end
+    
+    local closest, minDist = nil, math.huge
+    for _, titan in ipairs(titansFolder:GetChildren()) do
+        if not table.find(priorityList, titan.Name) then
+            local nape = titan:FindFirstChild("Hitboxes") and titan.Hitboxes:FindFirstChild("Hit") and titan.Hitboxes.Hit:FindFirstChild("Nape")
+            local humanoid = titan:FindFirstChildWhichIsA("Humanoid")
+            if nape and humanoid and humanoid.Health > 0 then
+                local dist = (Player.hrp.Position - nape.Position).Magnitude
+                if dist < minDist then
+                    closest = nape
+                    minDist = dist
+                end
+            end
+        end
+    end
+    
+    return closest
+end
+
+-- الدالة الرئيسية للقتل
+function killFromAbove()
+    task.delay(Config.startDelay, function()
+        Services.RunService.Heartbeat:Connect(function()
+            if not Config.isFlying or not Player.character:FindFirstChild("HumanoidRootPart") then return end
+            
+            local nape = getClosestValidNape()
+            if not nape then return end
+            
+            local targetPos = nape.Position + Vector3.new(0, Config.flyHeight, 0)
+            
+            if Config.moveMode == "Gliding" then
+                Player.hrp.AssemblyLinearVelocity = (targetPos - Player.hrp.Position).Unit * Config.flySpeed
+            else
+                Player.hrp.CFrame = CFrame.new(targetPos)
+            end
+            
+            if (Player.hrp.Position - nape.Position).Magnitude <= 1520 and Config.canHit then
+                Config.canHit = false
+                
+                task.spawn(function()
+                    local id = tostring(nape:GetDebugId())
+                    if Data.POST then
+                        Data.POST:FireServer("Hitboxes", "Register", nape, math.random(200, 300), math.random(20, 30) / 100)
+                        Data.POST:FireServer("Attacks", "Slash", true)
+                    end
+                    
+                    if not Data.notified[id] then
+                        Data.notified[id] = true
+                        Config.titanKillCount = Config.titanKillCount + 1
+                        showKillNotification(Config.titanKillCount)
+                    end
+                    
+                    task.wait(0.25)
+                    Config.canHit = true
+                end)
+            end
+        end)
+    end)
+end
+
+-- التحقق من الأسلحة
+function checkWeapons()
+    local bladesEmpty = false
+    local spearsEmpty = false
+    
+    local interface = Player.gui:FindFirstChild("Interface", true)
+    if interface then
+        local bladeSets = interface.HUD.Main.Top.Blades:FindFirstChild("Sets", true)
+        local spearCount = interface.HUD.Main.Top.Spears:FindFirstChild("Spears", true)
+        
+        if bladeSets then
+            bladesEmpty = tonumber(bladeSets.Text:match("^(%d+)") or "0") == 0
+        end
+        if spearCount then
+            spearsEmpty = tonumber(spearCount.Text:match("^(%d+)") or "0") == 0
+        end
+    end
+    
+    return bladesEmpty, spearsEmpty
+end
+
+-- العثور على نقطة إعادة التعبئة
+local reloads = workspace:FindFirstChild("Unclimbable") and workspace.Unclimbable:FindFirstChild("Reloads")
+if reloads then
+    for _, obj in ipairs(reloads:GetChildren()) do
+        if obj:FindFirstChild("Refill") then
+            Data.refill = obj.Refill
+            break
+        end
+    end
+end
+
+-- نظام إعادة التعبئة التلقائية
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if Config.autoRefill and Data.refill and Data.POST then
+            local bladesEmpty, spearsEmpty = checkWeapons()
+            
+            if bladesEmpty and not Config.lastBladesEmpty then
+                Data.POST:FireServer("Attacks", "Reload", Data.refill)
+            end
+            if spearsEmpty and not Config.lastSpearsEmpty then
+                Data.POST:FireServer("Attacks", "Reload", Data.refill)
+            end
+            
+            Config.lastBladesEmpty = bladesEmpty
+            Config.lastSpearsEmpty = spearsEmpty
+        end
+    end
+end)
+
+-- واجهة المستخدم
+Tabs.Main:AddToggle("AutoKillTitans", {
+    Title = "Auto Kill Titans",
+    Description = "Don't Finish the mission under 17 sec",
+    Default = false,
+    Callback = function(state)
+        Config.isFlying = state
+        if Config.isFlying then
+            task.spawn(killFromAbove)
+        end
+    end
+})
+
+Tabs.Main:AddDropdown("MoveMode", {
+    Title = "Movement Mode",
+    Values = {"Teleportation", "Gliding"},
+    Default = 1,
+    Callback = function(option)
+        Config.moveMode = option
+    end
+})
+
+Tabs.Main:AddSlider("StartDelaySlider", {
+    Title = "Farm Delay",
+    Description = "MINIMUM 20 SECONDS For Thunder Spears / MINIMUM 10 SECONDS For Blades",
+    Default = 5,
+    Min = 1,
+    Max = 50,
+    Rounding = 0,
+    Callback = function(value)
+        Config.startDelay = value
+    end
+})
+
+Tabs.Main:AddSlider("FlySpeedSlider", {
+    Title = "Gliding Speed",
+    Default = 300,
+    Min = 50,
+    Max = 500,
+    Rounding = 0,
+    Callback = function(value)
+        Config.flySpeed = value
+    end
+})
+
+Tabs.Main:AddSlider("FlyHeightSlider", {
+    Title = "Float Height",
+    Default = 250,
+    Min = 50,
+    Max = 300,
+    Rounding = 0,
+    Callback = function(value)
+        Config.flyHeight = value
+    end
+})
+
+Tabs.Misc:AddToggle("ToggleNotifications", {
+    Title = "Notifications",
+    Default = false,
+    Callback = function(value)
+        Config.notificationsEnabled = value
+    end
+})
+--//==============================\\--
+--||           👑 AUTO Ts         ||--
+--\\==============================//--
+
+
+-- Services & Variables
+local S={Players=game:GetService("Players"),ReplicatedStorage=game:GetService("ReplicatedStorage"),RunService=game:GetService("RunService")}
+local P={self=S.Players.LocalPlayer,char=nil,hrp=nil,gui=nil}
+P.char,P.gui=P.self.Character or P.self.CharacterAdded:Wait(),P.self:WaitForChild("PlayerGui")
+P.hrp=P.char:WaitForChild("HumanoidRootPart")
+
+local R=S.ReplicatedStorage.Assets.Remotes
+local GET,POST=R.GET,R.POST
+local C={isHovering=false,hoverPos=nil,autoTSRunning=false,killMode="Safe",lastBladesEmpty=false,lastSpearsEmpty=false}
+
+-- Get current spear count
+local function getSpears()
+    local l=P.gui:FindFirstChild("Interface",true)and P.gui.Interface.HUD.Main.Top.Spears:FindFirstChild("Spears",true)
+    if l and l:IsA("TextLabel")then
+        local c=tonumber(l.Text:match("^(%d+)")or"0")
+        return tostring(c),c>0
+    end
+    return"0",false
+end
+
+-- Get closest napes with priority
+local function getNapes(limit)
+    local pr={"Female_Titan","Attack_Titan","Armored_Titan"}
+    local sel,out={},{}
+    
+    -- Priority titans first
+    for _,t in ipairs(workspace.Titans:GetChildren())do
+        if table.find(pr,t.Name)then
+            local h,n=t:FindFirstChild("Humanoid"),t:FindFirstChild("Hitboxes")and t.Hitboxes:FindFirstChild("Hit")and t.Hitboxes.Hit:FindFirstChild("Nape")
+            if h and h.Health>0 and n then
+                for i=1,limit do table.insert(sel,{part=n,dist=(P.hrp.Position-n.Position).Magnitude})end
+            end
+        end
+    end
+    
+    if#sel>0 then
+        table.sort(sel,function(a,b)return a.dist<b.dist end)
+        for i=1,math.min(limit,#sel)do table.insert(out,sel[i].part)end
+        return out
+    end
+    
+    -- Regular titans
+    for _,t in ipairs(workspace.Titans:GetChildren())do
+        if not table.find(pr,t.Name)then
+            local h,n=t:FindFirstChild("Humanoid"),t:FindFirstChild("Hitboxes")and t.Hitboxes:FindFirstChild("Hit")and t.Hitboxes.Hit:FindFirstChild("Nape")
+            if h and h.Health>0 and n then
+                table.insert(sel,{part=n,dist=(P.hrp.Position-n.Position).Magnitude})
+            end
+        end
+    end
+    
+    table.sort(sel,function(a,b)return a.dist<b.dist end)
+    for i=1,math.min(limit,#sel)do table.insert(out,sel[i].part)end
+    return out
+end
+
+-- Teleport above nape
+local function tpAbove(part)
+    local tp=part.Position+Vector3.new(0,flyHeight,0)
+    local d=(P.hrp.Position-tp).Magnitude
+    
+    if d>150 then P.char:PivotTo(CFrame.new(tp))else P.hrp.CFrame=CFrame.new(tp)end
+    C.hoverPos,C.isHovering=tp,true
+end
+
+-- Hover system
+S.RunService.Heartbeat:Connect(function()
+    if C.isHovering and C.hoverPos then
+        P.hrp.Velocity=Vector3.zero
+        P.hrp.CFrame=CFrame.new(C.hoverPos)
+    end
+end)
+
+-- Main kill loop
+local function killLoop()
+    local first=true
+    while C.autoTSRunning do
+        task.wait(1)
+        
+        -- Wait for roar to finish
+        if workspace:FindFirstChild("Debris")and workspace.Debris:FindFirstChild("Roar")then
+            repeat task.wait(.1)until not workspace.Debris:FindFirstChild("Roar")
+        end
+        
+        local slot,hasAmmo=getSpears()
+        if hasAmmo then
+            local kc=C.killMode=="Risk"and math.random(10,25)or math.random(3,10)
+            local napes=getNapes(kc)
+            
+            if#napes>0 then
+                tpAbove(napes[1])
+                if first then task.wait(startDelay)first=false end
+                
+                GET:InvokeServer("Spears","S_Fire",slot)
+                for _,n in ipairs(napes)do
+                    if n and n.Position then
+                        POST:FireServer("Spears","S_Explode",n.Position,0.501303055920385,450.20495501920485)
+                    end
+                end
+            end
+        end
+        
+        if not C.hoverPos then C.hoverPos=P.hrp.Position+Vector3.new(0,flyHeight,0)end
+        C.isHovering=true
+    end
+end
+
+-- Find refill point
+local function findRefill()
+    local r=workspace:FindFirstChild("Unclimbable")and workspace.Unclimbable:FindFirstChild("Reloads")
+    if r then
+        for _,o in ipairs(r:GetChildren())do
+            if o:FindFirstChild("Refill")then return o.Refill end
+        end
+    end
+end
+
+-- Check weapons
+local function checkBlades()
+    local s=P.gui:FindFirstChild("Interface",true)and P.gui.Interface.HUD.Main.Top.Blades:FindFirstChild("Sets",true)
+    if s and s:IsA("TextLabel")then
+        local c=tonumber(s.Text:match("(%d+)/%d+"))
+        return c and c==0 or false
+    end
+    return false
+end
+
+local function checkSpears()
+    local l=P.gui:FindFirstChild("Interface",true)and P.gui.Interface.HUD.Main.Top.Spears:FindFirstChild("Spears",true)
+    if l and l:IsA("TextLabel")then
+        local c=tonumber(l.Text:match("(%d+)/%d+"))
+        return c and c==0 or false
+    end
+    return false
+end
+
+-- Auto refill system
+task.spawn(function()
+    repeat task.wait()until POST
+    while true do
+        task.wait(.3)
+        if autoRefill then
+            local ref=findRefill()
+            if ref then
+                local be,se=checkBlades(),checkSpears()
+                if be and not C.lastBladesEmpty then
+                    POST:FireServer("Attacks","Reload",ref)
+                    task.wait(.2)
+                end
+                if se and not C.lastSpearsEmpty then
+                    POST:FireServer("Attacks","Reload",ref)
+                    task.wait(.2)
+                end
+                C.lastBladesEmpty,C.lastSpearsEmpty=be,se
+            end
+        end
+    end
+end)
+
+-- UI Controls
+Tabs.Ts:AddToggle("AutoTS_Free",{
+    Title="Auto Thunder Spears",
+    Default=false,
+    Callback=function(s)
+        C.autoTSRunning=s
+        if s then task.spawn(killLoop)end
+    end
+})
+
+Tabs.Ts:AddDropdown("KillModeDropdown",{
+    Title="Kill Mode",
+    Values={"Safe","Risk"},
+    Multi=false,
+    Default="Safe",
+    Callback=function(v)C.killMode=v end
+})
+
+
+--//==============================\\--
+--||        👑 AUTO Mission       ||--
+--\\==============================//--
+
+
+local HttpService = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local POST = ReplicatedStorage.Assets.Remotes.POST
+local GET = ReplicatedStorage.Assets.Remotes.GET
+local Missions = ReplicatedStorage:FindFirstChild("Missions")
+if not Missions then
+    warn("⚠️")
+end
+
+-- متغيرات لتخزين الخيارات
+getgenv().selectedMap = "Shiganshina"
+getgenv().selectedDifficulty = "Hard"
+getgenv().selectedObjective = "Skirmish"
+
+local selectedModifiers = {}
+
+-- 🗺️ اختيار الخريطة (Dropdown)
+local mapOptions = {"Shiganshina", "Trost", "Outskirts", "Giant Forest", "Utgard", "Loading Docks", "Stohess"}
+Tabs.AutoMission:AddDropdown("MapDropdown", {
+    Title = "Select Map",
+    Values = mapOptions,
+    Multi = false,
+    Default = "Shiganshina",
+    Callback = function(value)
+        getgenv().selectedMap = value
+    end
+})
+
+-- 🔥 اختيار الصعوبة (Dropdown)
+local difficultyOptions = {"Easy", "Normal", "Hard", "Severe", "Aberrant"}
+Tabs.AutoMission:AddDropdown("DifficultyDropdown", {
+    Title = "Select Difficulty",
+    Values = difficultyOptions,
+    Multi = false,
+    Default = "Hard",
+    Callback = function(value)
+        getgenv().selectedDifficulty = value
+    end
+})
+
+-- 🎯 اختيار الهدف (Dropdown)
+local objectiveOptions = {"Skirmish", "Breach", "Protect", "Escort", "Defend", "Stall", "Guard", "Random"}
+Tabs.AutoMission:AddDropdown("ObjectiveDropdown", {
+    Title = "Select Objective",
+    Values = objectiveOptions,
+    Multi = false,
+    Default = "Skirmish",
+    Callback = function(value)
+        getgenv().selectedObjective = value
+    end
+})
+
+-- ✅ اختيارات متعددة للموديفايرز في تبويب مستقل باستخدام Toggles
+local modifierOptions = {
+    "No Perks", "No Skills", "No Talents", "Nightmare", "Oddball",
+    "Injury Prone", "Chronic Injuries", "Fog", "Glass Cannon",
+    "Time Trial", "Boring", "Simple"
+}
+
+for _, mod in ipairs(modifierOptions) do
+    selectedModifiers[mod] = false
+    Tabs.Modifiers:AddToggle("Mod_"..mod, {
+        Title = mod,
+        Default = false,
+        Callback = function(value)
+            selectedModifiers[mod] = value
+        end
+    })
+end
+
+-- 🧠 زر بدء المهمة تلقائيًا
+Tabs.AutoMission:AddButton({
+    Title = "Start Auto Mission",
+    Callback = function()
+        if not Missions then
+            warn(".")
+            return
+        end
+
+        GET:InvokeServer("Missions", "Open")
+        task.wait(1.5)
+
+        local activeModifiers = {}
+        for _, mod in ipairs(modifierOptions) do
+            if selectedModifiers[mod] then
+                table.insert(activeModifiers, mod)
+            end
+        end
+
+        local mapData = {
+            Name = getgenv().selectedMap,
+            Difficulty = getgenv().selectedDifficulty,
+            Type = "Missions",
+            Objective = getgenv().selectedObjective
+        }
+
+        POST:FireServer("S_Missions", "Create", mapData)
+
+        local isLeader = false
+        local timeout = 10
+        local elapsed = 0
+        local mission = nil
+
+        while elapsed < timeout do
+            for _, m in pairs(Missions:GetChildren()) do
+                local leader = m:FindFirstChild("Leader")
+                if leader and leader.Value == player.Name then
+                    mission = m
+                    isLeader = true
+                    break
+                end
+            end
+            if isLeader then break end
+            task.wait(1)
+            elapsed += 1
+        end
+
+        if isLeader and mission then
+            -- نرسل كل Modifier مفعّل واحد واحد بعد الإنشاء
+            for _, mod in ipairs(activeModifiers) do
+                GET:InvokeServer("S_Missions", "Modify", mod)
+                task.wait(0.1)
+            end
+
+            task.wait(1)
+            POST:FireServer("S_Missions", "Start")
+        else
+            warn(".")
+        end
+    end
+})
+
+
+
+
+--//==============================\\--
+--||        👑 AUTO Reload        ||--
+--\\==============================//--
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local GET = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("Remotes"):WaitForChild("GET")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local BladeBar = nil
+
+do
+    local success, err = pcall(function()
+        local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+        local interface = playerGui and playerGui:FindFirstChild("Interface")
+        local hud = interface and interface:FindFirstChild("HUD")
+        local main = hud and hud:FindFirstChild("Main")
+        local top = main and main:FindFirstChild("Top")
+        local blades = top and top:FindFirstChild("Blades")
+        local inner = blades and blades:FindFirstChild("Inner")
+        local bar = inner and inner:FindFirstChild("Bar")
+        BladeBar = bar and bar:FindFirstChild("Gradient")
+    end)
+end
+
+if not BladeBar then
+    warn(".")
+end
+
+local autoReloadRunning = false
+local autoReloadThread
+
+Tabs.Main:AddToggle("AutoReload", {
+    Title = "Auto Reload Blades",
+    Default = false,
+    Callback = function(Value)
+        if not BladeBar then
+            warn("❌ BladeBar غير موجود")
+            return
+        end
+
+        if Value then
+            autoReloadRunning = true
+            autoReloadThread = task.spawn(function()
+                while autoReloadRunning do
+                    if BladeBar.Offset == Vector2.new(-0.15, 0) then
+                        -- نحاول إعادة التعبئة كل مرة خلال النقص
+                        pcall(function()
+                            GET:InvokeServer("Blades", "Reload")
+                        end)
+                    end
+                    task.wait(0.3) -- تأخير بسيط يمنع السبام المفرط
+                end
+            end)
+        else
+            autoReloadRunning = false
+        end
+    end
+})
+
+
+
+
+
+--//==============================\\--
+--||        👑 AUTO Refill        ||--
+--\\==============================//--
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local POST = ReplicatedStorage.Assets.Remotes.POST
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local gui = player:WaitForChild("PlayerGui")
+
+local autoRefill = false
+local refill = nil
+
+-- نحاول نلقى أول عنصر فيه "Refill" إذا موجود
+local reloads = workspace:FindFirstChild("Unclimbable")
+    and workspace.Unclimbable:FindFirstChild("Reloads")
+
+if reloads then
+    for _, obj in ipairs(reloads:GetChildren()) do
+        if obj:FindFirstChild("Refill") then
+            refill = obj.Refill
+            break
+        end
+    end
+else
+    warn("[⚠️] Unclimbable أو Reloads غير موجودين حالياً.")
+end
+
+-- تنبيه إذا ما لقينا Refill
+if not refill then
+    warn("[❌] ما تم العثور على Refill داخل Reloads")
+end
+
+-- التحقق من أن النص 0 / 3
+local function isBladesZero()
+    local sets = gui:FindFirstChild("Interface")
+        and gui.Interface:FindFirstChild("HUD")
+        and gui.Interface.HUD:FindFirstChild("Main")
+        and gui.Interface.HUD.Main:FindFirstChild("Top")
+        and gui.Interface.HUD.Main.Top:FindFirstChild("Blades")
+        and gui.Interface.HUD.Main.Top.Blades:FindFirstChild("Sets")
+
+    return sets and sets.Text == "0 / 3"
+end
+
+-- حلقة التحقق المستمر
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if autoRefill and isBladesZero() and refill then
+            POST:FireServer("Attacks", "Reload", refill)
+        end
+    end
+end)
+
+-- التوقل
+local Toggle = Tabs.Main:AddToggle("AutoRefillToggle", {
+    Title = "Auto Refill",
+    Default = false,
+    Callback = function(state)
+        autoRefill = state
+    end
+})
+
+
+
+
+
+
+
+
+--//==============================\\--
+--||        👑 AUTO Retry         ||--
+--\\==============================//--
+
+local VIM = game:GetService("VirtualInputManager")
+local GuiService = game:GetService("GuiService")
+local UserInputService = game:GetService("UserInputService")
+local player = game.Players.LocalPlayer
+
+local interface = player:FindFirstChild("PlayerGui")
+    and player.PlayerGui:FindFirstChild("Interface")
+
+local rewards = interface and interface:FindFirstChild("Rewards")
+local rewardsMain = rewards and rewards:FindFirstChild("Main")
+local retryBtn = rewardsMain
+    and rewardsMain:FindFirstChild("Info")
+    and rewardsMain.Info:FindFirstChild("Main")
+    and rewardsMain.Info.Main:FindFirstChild("Buttons")
+    and rewardsMain.Info.Main.Buttons:FindFirstChild("Retry")
+
+local autoRetryEnabled = false
+
+-- 🟥 تُظهر نقطة حمراء في مكان الضغط
+local function showDebugDot(x, y)
+	local dot = Instance.new("Frame")
+	dot.Size = UDim2.new(0, 10, 0, 10)
+	dot.Position = UDim2.new(0, x - 5, 0, y - 5)
+	dot.BackgroundColor3 = Color3.new(1, 0, 0)
+	dot.BorderSizePixel = 0
+	dot.ZIndex = 10000
+	dot.Name = "DebugDot"
+	pcall(function()
+		dot.Parent = game:GetService("CoreGui")
+	end)
+	game:GetService("Debris"):AddItem(dot, 2)
+end
+
+-- 🖱️ دالة الضغط الذكي على الزر
+local function Retryshi()
+	local pos = retryBtn.AbsolutePosition
+	local size = retryBtn.AbsoluteSize
+	local inset = GuiService:GetGuiInset()
+
+	local x = pos.X + size.X / 2 + 20 -- تعويض لليمين
+	local y
+
+	if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+		y = pos.Y + size.Y / 2 + 60 -- تعويض لأسفل
+	else
+		y = pos.Y + size.Y / 2 + inset.Y
+	end
+
+	showDebugDot(x, y)
+
+	VIM:SendMouseButtonEvent(x, y, 0, true, game, 0)
+	task.wait(0.05)
+	VIM:SendMouseButtonEvent(x, y, 0, false, game, 0)
+end
+
+-- هل الشروط مناسبة للضغط؟
+local function shouldClickRetry()
+	return retryBtn
+		and rewards and rewards.Visible
+		and rewardsMain and rewardsMain.Visible
+		and retryBtn.Visible
+		and retryBtn.AbsoluteSize.Magnitude > 10
+end
+
+-- التكرار التلقائي مع تأخير قبل الضغط
+task.spawn(function()
+	while true do
+		if autoRetryEnabled and shouldClickRetry() then
+			task.wait(1) -- ⏳ انتظر ثانية قبل الضغط
+			if shouldClickRetry() then -- تحقق مرة ثانية بعد الانتظار
+				Retryshi()
+				task.wait(3.5)
+			end
+		end
+		task.wait(0.5)
+	end
+end)
+
+-- زر التفعيل في الواجهة
+local Toggle = Tabs.Main:AddToggle("AutoRetryToggle", {
+    Title = "Auto Retry",
+    Default = false,
+    Callback = function(state)
+        autoRetryEnabled = state
+    end
+})
+
+
+
+--//==============================\\--
+--||        👑 AUTO Escape        ||--
+--\\==============================//--
+
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = game.Players.LocalPlayer
+local gui = player:WaitForChild("PlayerGui")
+local POST = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("Remotes"):WaitForChild("POST")
+
+local escapeRunning = false
+local escapeThread = nil
+local cleanGUIThread = nil
+local lastEscapeButton = nil
+
+-- التوقل المدموج مع التاب
+Tabs.Main:AddToggle("Escape", {
+    Title = "Auto Escape",
+    Default = false,
+    Callback = function(Value)
+        escapeRunning = Value
+
+        if escapeRunning then
+            -- تفعيل الهروب التلقائي
+            escapeThread = task.spawn(function()
+                while escapeRunning do
+                    local interface = gui:FindFirstChild("Interface")
+                    local buttons = interface and interface:FindFirstChild("Buttons")
+
+                    if buttons then
+                        local currentButtons = buttons:GetChildren()
+
+                        if #currentButtons > 0 then
+                            local newestButton = currentButtons[1]
+
+                            if newestButton ~= lastEscapeButton then
+                                lastEscapeButton = newestButton
+
+                                POST:FireServer(table.unpack({
+                                    "Attacks",
+                                    "Slash_Escape"
+                                }))
+                            end
+                        else
+                            lastEscapeButton = nil
+                        end
+                    else
+                        lastEscapeButton = nil
+                    end
+
+                    task.wait(0.1)
+                end
+            end)
+
+            -- حذف الأزرار من الشاشة
+            cleanGUIThread = task.spawn(function()
+                while escapeRunning do
+                    local interface = gui:FindFirstChild("Interface")
+                    local buttons = interface and interface:FindFirstChild("Buttons")
+
+                    if buttons then
+                        for _, btn in pairs(buttons:GetChildren()) do
+                            btn:Destroy()
+                        end
+                    end
+
+                    task.wait(0.1)
+                end
+            end)
+        else
+            escapeRunning = false
+            lastEscapeButton = nil
+        end
+    end
+})
+
+
+
+
+
+
+
+
+
+
+
+
+
+--//==============================\\--
+--||          👑 dmg txt          ||--
+--\\==============================//--
+
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local interface = player:WaitForChild("PlayerGui"):WaitForChild("Interface")
+
+local damageConnection
+
+local Toggle = Tabs.Misc:AddToggle("dmg", 
+{
+    Title = "Remove Dmg Text", 
+    Default = false,
+    Callback = function(state)
+        if state then
+
+            for _, obj in pairs(interface:GetDescendants()) do
+                if obj:IsA("TextLabel") and obj.Name == "Number" then
+                    obj.Visible = false
+                end
+            end
+
+
+            damageConnection = interface.DescendantAdded:Connect(function(obj)
+                if obj:IsA("TextLabel") and obj.Name == "Number" then
+                    obj.Visible = false
+                end
+            end)
+        else
+
+            if damageConnection then
+                damageConnection:Disconnect()
+                damageConnection = nil
+            end
+        end
+    end 
+})
+
+
+--//==============================\\--
+--||       👑 Main + Lobby        ||--
+--\\==============================//--
+
+
+-- PlaceIds
+local lobbyPlaceId = 14916516914
+local mainMenuPlaceId = 13379208636
+
+-- زر الانتقال إلى الـ Lobby
+Tabs.Misc:AddButton({
+    Title = "Return to Lobby",
+    Callback = function()
+        TeleportService:Teleport(lobbyPlaceId, player)
+    end
+})
+
+-- زر الانتقال إلى الـ Main Menu
+Tabs.Misc:AddButton({
+    Title = "Return to Main Menu",
+    Callback = function()
+        TeleportService:Teleport(mainMenuPlaceId, player)
+    end
+})
+
+Tabs.Misc:AddButton({
+    Title = "Force Retry",
+    Callback = function()
+        local success, err = pcall(function()
+            retryRemote:InvokeServer("Functions", "Retry", "Add")
+        end)
+        if success then
+        else
+            warn(".")
+        end
+    end,
+})
+
+
+
+
+
+
+
+
+
+
+--//==============================\\--
+--||           👑 Raids           ||--
+--\\==============================//--
+
+
+
+--============[ 1. Auto Skip Cutscene ]============--
+
+local VIM = game:GetService("VirtualInputManager")
+local GuiService = game:GetService("GuiService")
+local player = game.Players.LocalPlayer
+
+local interface = player:FindFirstChild("PlayerGui")
+    and player.PlayerGui:FindFirstChild("Interface")
+
+local skipBtn = interface and interface:FindFirstChild("Skip")
+
+local autoSkipEnabled = false
+
+local function shouldClickSkip()
+	return skipBtn
+		and skipBtn.Visible
+		and skipBtn.AbsoluteSize.Magnitude > 10
+end
+
+local function pressSkip()
+	local pos = skipBtn.AbsolutePosition
+	local size = skipBtn.AbsoluteSize
+	local inset = GuiService:GetGuiInset()
+
+	local x = pos.X + size.X / 2
+	local y = pos.Y + size.Y / 2 + inset.Y
+
+	VIM:SendMouseButtonEvent(x, y, 0, true, game, 0)
+	task.wait(0.05)
+	VIM:SendMouseButtonEvent(x, y, 0, false, game, 0)
+end
+
+task.spawn(function()
+	while true do
+		if autoSkipEnabled and shouldClickSkip() then
+			pressSkip()
+			task.wait(1) -- تقلل الانتظار عشان يضغط بسرعة
+		end
+		task.wait(0.5)
+	end
+end)
+
+local Toggle = Tabs.Raids:AddToggle("AutoSkipCutscene", {
+    Title = "Auto Skip Cutscene",
+    Default = false,
+    Callback = function(state)
+        autoSkipEnabled = state
+    end
+})
+
+
+--============[ 1. Auto Open Chests ]============--
+
+
+local VIM = game:GetService("VirtualInputManager")
+local GuiService = game:GetService("GuiService")
+local player = game.Players.LocalPlayer
+local Gui = player:WaitForChild("PlayerGui")
+
+-- تحكم التوقلات
+local autoFreeEnabled = false
+local autoPremiumEnabled = false
+
+local function canClick(btn)
+	return btn and btn.Visible and btn.AbsoluteSize.Magnitude > 10
+end
+
+local function isActuallyVisible(obj)
+	if not obj then return false end
+	local current = obj
+	while current and current ~= Gui do
+		local success, result = pcall(function() return current.Visible end)
+		if success and not result then
+			return false
+		end
+		current = current.Parent
+	end
+	return obj.AbsoluteSize.Magnitude > 10
+end
+
+local function clickButton(btn)
+	local pos = btn.AbsolutePosition
+	local size = btn.AbsoluteSize
+	local inset = GuiService:GetGuiInset()
+
+	local x = pos.X + size.X / 2
+	local y = pos.Y + size.Y / 2 + inset.Y
+
+	VIM:SendMouseMoveEvent(x, y, game)
+	task.wait(0.05)
+	VIM:SendMouseButtonEvent(x, y, 0, true, game, 0)
+	task.wait(0.05)
+	VIM:SendMouseButtonEvent(x, y, 0, false, game, 0)
+end
+
+-- 🔁 Auto Free Chest
+task.spawn(function()
+	local interface = Gui:WaitForChild("Interface")
+	local chests = interface:WaitForChild("Chests")
+	local freeBtn = chests:WaitForChild("Free")
+	local finishBtn = chests:WaitForChild("Finish")
+
+	while true do
+		if autoFreeEnabled and isActuallyVisible(finishBtn) then
+			if canClick(freeBtn) then
+				clickButton(freeBtn)
+				task.wait(7)
+			end
+			if canClick(finishBtn) then
+				clickButton(finishBtn)
+				task.wait(2)
+			end
+			while isActuallyVisible(finishBtn) do
+				task.wait(1)
+			end
+		else
+			task.wait(1)
+		end
+	end
+end)
+
+-- 🔁 Auto Premium Chest
+task.spawn(function()
+	local interface = Gui:WaitForChild("Interface")
+	local chests = interface:WaitForChild("Chests")
+	local premiumBtn = chests:WaitForChild("Premium")
+	local finishBtn = chests:WaitForChild("Finish")
+
+	while true do
+		if autoPremiumEnabled and isActuallyVisible(finishBtn) then
+			if canClick(premiumBtn) then
+				clickButton(premiumBtn)
+				task.wait(7)
+			end
+			if canClick(finishBtn) then
+				clickButton(finishBtn)
+				task.wait(2)
+			end
+			while isActuallyVisible(finishBtn) do
+				task.wait(1)
+			end
+		else
+			task.wait(1)
+		end
+	end
+end)
+
+
+Tabs.Raids:AddToggle("AutoPremiumChest", {
+	Title = "Auto Premium Chest",
+	Default = false,
+	Callback = function(state)
+		autoPremiumEnabled = state
+	end
+})
+
+
+-- ✅ التوقلين باستخدام Fluent UI
+Tabs.Raids:AddToggle("AutoFreeChest", {
+	Title = "Auto Free Chest",
+	Default = false,
+	Callback = function(state)
+		autoFreeEnabled = state
+	end
+})
+
+
+
+
+
+
+
+
+--//==============================\\--
+--||           👑 Webhook         ||--
+--\\==============================//--
+
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+local webhookURL = ""
+local sendWebhook = false
+local showUsername = false
+local thumbnailURL = "https://cdn.discordapp.com/attachments/1367996668720709725/1386083514587287572/medium-black-clover-asta-anime-hd-matte-finish-poster-original-imagkzhgfjwypmve.webp?ex=68586a5e&is=685718de&hm=68f05b54591e5547eb9de710438386270fed5d992a3a83cfa2eaa646a19716f4&"
+
+
+local function formatWithCommas(number)
+    number = tonumber(number)
+    if not number then return "0" end
+    local formatted = tostring(number)
+    local k
+    while true do  
+        formatted, k = formatted:gsub("^(-?%d+)(%d%d%d)", '%1,%2')
+        if k == 0 then break end
+    end
+    return formatted
+end
+
+-- ✅ UI Toggles
+Tabs.Webhook:AddToggle("SendWebhookToggle", {
+    Title = "Notify Webhook",
+    Default = false,
+    Callback = function(Value) sendWebhook = Value end
+})
+
+Tabs.Webhook:AddToggle("DisplayUsernameToggle", {
+    Title = "Display Roblox Username",
+    Default = false,
+    Callback = function(Value) showUsername = Value end
+})
+
+Tabs.Webhook:AddInput("WebhookInput", {
+    Title = "Webhook",
+    Placeholder = "https://discord.com/api/webhooks/...",
+    Finished = true,
+    Callback = function(Value) webhookURL = Value end
+})
+
+-- ✅ التحقق من ظهور الزر فعليًا
+local function isActuallyVisible(instance)
+    if not instance or not instance:IsDescendantOf(player.PlayerGui) then return false end
+    while instance and instance ~= player.PlayerGui do
+        if instance:IsA("GuiObject") and not instance.Visible then return false end
+        instance = instance.Parent
+    end
+    return true
+end
+
+-- ✅ جلب زر Retry
+local function getRetryButton()
+    local gui = player:FindFirstChild("PlayerGui")
+    return gui and gui:FindFirstChild("Interface")
+        and gui.Interface:FindFirstChild("Rewards")
+        and gui.Interface.Rewards:FindFirstChild("Main")
+        and gui.Interface.Rewards.Main:FindFirstChild("Info")
+        and gui.Interface.Rewards.Main.Info:FindFirstChild("Main")
+        and gui.Interface.Rewards.Main.Info.Main:FindFirstChild("Buttons")
+        and gui.Interface.Rewards.Main.Info.Main.Buttons:FindFirstChild("Retry")
+end
+
+-- ✅ جلب قيمة نص معين
+local function getText(path)
+    local node = player:FindFirstChild("PlayerGui")
+    for _, part in ipairs(string.split(path, ".")) do
+        if not node then return "0" end
+        node = node:FindFirstChild(part)
+    end
+    return node and node.Text or "0"
+end
+
+local aliasMap = {
+    Serum = { "Attack Serum", "Armored Serum", "Female Serum" },
+}
+
+local function getDropQuantity(dropName)
+    local base = player:FindFirstChild("PlayerGui")
+    base = base and base:FindFirstChild("Interface")
+    base = base and base:FindFirstChild("Rewards")
+    base = base and base:FindFirstChild("Main")
+    base = base and base:FindFirstChild("Info")
+    base = base and base:FindFirstChild("Main")
+    base = base and base:FindFirstChild("Items")
+
+    local total = 0
+    if base then
+        local names = aliasMap[dropName] or { dropName }
+
+        for _, name in ipairs(names) do
+            for _, drop in ipairs(base:GetChildren()) do
+                if drop.Name == name then
+                    for _, sub in pairs(drop:GetDescendants()) do
+                        if sub:IsA("TextLabel") then
+                            local raw = sub.Text:match("[%d,.]+")
+                            if raw then
+                                raw = raw:gsub(",", "")
+                                local number = tonumber(raw)
+                                if number then
+                                    total += number
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return tostring(total)
+end
+
+-- ✅ Main loop
+local lastMissionTime = nil
+task.spawn(function()
+    while true do
+        local retryBtn = getRetryButton()
+        if isActuallyVisible(retryBtn) and sendWebhook and webhookURL ~= "" then
+            local currentTime = getText("Interface.Rewards.Main.Info.Main.Stats.Time_Taken.Amount")
+            if currentTime ~= "0" and currentTime ~= lastMissionTime then
+                lastMissionTime = currentTime
+
+                local gold = getDropQuantity("Gold")
+                local xp = getDropQuantity("XP")
+                local bp_xp = getDropQuantity("BP_XP")
+                local gems = getDropQuantity("Gems")
+                local serum = getDropQuantity("Serum")
+                local scarf = getDropQuantity("Scarf")
+                local common = getDropQuantity("Common_Perk")
+                local rare = getDropQuantity("Rare_Perk")
+                local epic = getDropQuantity("Epic_Perk")
+                local leg = getDropQuantity("Legendary_Perk")
+                local prestige = getDropQuantity("Prestige_Scroll")
+                local mythical = getDropQuantity("Secret_Perk")
+
+                local damage = getText("Interface.Rewards.Main.Info.Main.Stats.Damage_Dealt.Amount")
+                local kills = getText("Interface.Rewards.Main.Info.Main.Stats.Titans_Killed.Amount")
+                local crits = getText("Interface.Rewards.Main.Info.Main.Stats.Critical_Hits.Amount")
+
+                local timeString = os.date("%d-%b-%Y %I:%M %p")
+
+                local fields = {
+                    {name = "**User:**", value = tostring(showUsername and player.Name or "Disabled"), inline = false},
+                    {name = "**Stats:**", value = string.format(
+                        "%s Time Taken\n%s Damage Dealt\n%s Titan Kills\n%s Critical Hits",
+                        currentTime, formatWithCommas(damage:gsub(",", "")), kills, crits
+                    ), inline = true},
+                    {name = "**Rewards:**", value = string.format(
+                        "%s Gold\n%s XP\n%s Gems",
+                        formatWithCommas(gold), formatWithCommas(xp), formatWithCommas(gems)
+                    ), inline = true},
+                    {name = "**Drops:**", value = string.format(
+                        "Battle Bass XP: %s\nCommon Perks: %s\nRare Perks: %s\nEpic Perks: %s\nLegendary Perks: %s\nPrestige Scroll: %s",
+                        formatWithCommas(bp_xp), formatWithCommas(common), formatWithCommas(rare),
+                        formatWithCommas(epic), formatWithCommas(leg), formatWithCommas(prestige)
+                    ), inline = true},
+                    {name = "**Special Rewards:**", value = string.format(
+                        "Serum: %s\nMythical Perk: %s\nScarf: %s",
+                        formatWithCommas(serum), formatWithCommas(mythical), formatWithCommas(scarf)
+                    ), inline = false}
+                }
+
+                local embed = {
+                    title = "AOT:R Rewards Logger",
+                    thumbnail = { url = thumbnailURL },
+                    fields = fields,
+                    footer = { text = "Sent at: " .. timeString }
+                }
+
+                local data = {
+                    content = ((tonumber(serum) or 0) > 0 or (tonumber(mythical) or 0) > 0 or (tonumber(scarf) or 0) > 0) and "@everyone" or nil,
+                    embeds = {embed}
+                }
+
+                request({
+                    Url = webhookURL,
+                    Method = "POST",
+                    Headers = {["Content-Type"] = "application/json"},
+                    Body = HttpService:JSONEncode(data)
+                })
+            end
+        end
+        task.wait(1)
+    end
+end)
+
+
+
+--//==============================\\--
+--||       👑  Titan Ripper       ||--
+--\\==============================//--
+
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Event = ReplicatedStorage.Assets.Remotes.GET
+
+local SkillData
+local success, result = pcall(function()
+    return ReplicatedStorage:WaitForChild("Modules", 5)
+        :WaitForChild("Storage", 5)
+        :WaitForChild("Skill", 5)
+end)
+
+if success and result then
+    SkillData = require(result)
+else
+    SkillData = {}
+end
+
+print("SkillData 14:", SkillData["14"])
+print("SkillData 23:", SkillData["23"])
+
+local autoSkillEnabled = false
+
+local skills = {
+    ["14"] = { lastUsed = 0, initialDelay = 0 },
+    ["23"] = { lastUsed = 0, initialDelay = 0.4 }
+}
+
+for skillID, info in pairs(skills) do
+    task.spawn(function()
+        task.wait(info.initialDelay)
+        while true do
+            task.wait(0.1)
+            if autoSkillEnabled then
+                local now = tick()
+                local skillInfo = typeof(SkillData) == "table" and SkillData[skillID]
+
+                if skillInfo and skillInfo.Cooldown then
+                    if now - info.lastUsed >= skillInfo.Cooldown then
+                        local success = pcall(function()
+                            Event:InvokeServer("S_Skills", "Usage", skillID, false)
+                        end)
+                        if success then
+                            info.lastUsed = tick()
+                            print("[✓] Skill used:", skillID)
+                        else
+                            warn("[x] Skill failed:", skillID)
+                        end
+                    end
+                else
+                    warn("Skill info missing for:", skillID)
+                end
+            end
+        end
+    end)
+end
+
+Tabs.Main:AddToggle("AutoSkillNapeToggle", {
+    Title = "Titan Ripper",
+    Default = false,
+    Callback = function(state)
+        autoSkillEnabled = state
+
+        if state then
+            for _, info in pairs(skills) do
+                info.lastUsed = 0
+                info.initialDelayDone = false
+            end
+
+            resizeNapes()
+            connection = workspace.DescendantAdded:Connect(function(desc)
+                if desc:IsA("BasePart") and desc.Name == "Nape" then
+                    task.wait(0.1)
+                    desc.Size = newSize
+                    desc.CFrame = desc.CFrame
+                end
+            end)
+        else
+            if connection then
+                connection:Disconnect()
+                connection = nil
+            end
+        end
+    end
+})
+
+-- 📏 تكبير النيب
+local newSize = Vector3.new(1500, 1500, 1500)
+local connection
+
+local function resizeNapes()
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v:IsA("BasePart") and v.Name == "Nape" then
+            v.Size = newSize
+            v.CFrame = v.CFrame
+        end
+    end
+end
+
+
+
+--//==============================\\--
+--||   👑 Auto Kill Titans (Safe)  ||--
+--\\==============================//--
+
+local bladesLabel
+local flying = false
+local isKilling = false
+local bp
+
+-- دالة جلب عدد الشفرات
+local function safeGetBlades()
+    local success, gui = pcall(function()
+        return player:WaitForChild("PlayerGui"):WaitForChild("Interface")
+    end)
+    if not success or not gui then return false end
+
+    local blades = gui:FindFirstChild("HUD") and gui.HUD.Main.Top.Blades:FindFirstChild("Sets")
+    if blades then
+        bladesLabel = blades
+        return true
+    end
+    return false
+end
+
+local function getBladesCount()
+    if not bladesLabel then
+        safeGetBlades()
+    end
+    return tonumber(bladesLabel and bladesLabel.Text:match("(%d+)") or "0")
+end
+
+-- أقرب نيب
+local function getClosestNape()
+    local closest, dist = nil, math.huge
+    for _, model in ipairs(workspace.Titans:GetChildren()) do
+        local hitboxes = model:FindFirstChild("Hitboxes")
+        if hitboxes then
+            local hit = hitboxes:FindFirstChild("Hit")
+            if hit then
+                local nape = hit:FindFirstChild("Nape")
+                if nape and model:FindFirstChild("Humanoid") and model.Humanoid.Health > 0 then
+                    local d = (hrp.Position - nape.Position).Magnitude
+                    if d < dist then
+                        closest = nape
+                        dist = d
+                    end
+                end
+            end
+        end
+    end
+    return closest
+end
+
+-- القتل
+local function diveAndKill(nape)
+    isKilling = true
+
+    local down = nape.Position + Vector3.new(0, 0.5, -1.5)
+    local up = down + Vector3.new(0, flyHeight, 0)
+
+    hrp.CFrame = CFrame.lookAt(down, nape.Position)
+
+    local lock = Instance.new("BodyPosition")
+    lock.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+    lock.P = 40000
+    lock.D = 1000
+    lock.Position = down
+    lock.Name = "KillLock"
+    lock.Parent = hrp
+
+    local maxWait = 1
+    local timer = 0
+    while (hrp.Position - down).Magnitude > 1.5 and timer < maxWait do
+        task.wait(0.01)
+        timer += 0.01
+    end
+
+    task.wait(0.25)
+    hrp.CFrame = CFrame.lookAt(hrp.Position, nape.Position)
+
+    VirtualInput:SendMouseButtonEvent(500, 500, 0, true, game, 0)
+    task.wait(0.01)
+    VirtualInput:SendMouseButtonEvent(500, 500, 0, false, game, 0)
+
+    task.wait(0.2)
+    lock:Destroy()
+    hrp.CFrame = CFrame.new(up)
+
+    isKilling = false
+end
+
+-- حلقة الطيران والهجوم
+RunService.Heartbeat:Connect(function()
+    if not flying or isKilling then return end
+
+    local blades = getBladesCount()
+    local flySpeed = 50 -- سرعة الطيران
+
+    local nape = getClosestNape()
+    if nape then
+        local flyPos = nape.Position + Vector3.new(0, flyHeight, 0)
+        local dir = (flyPos - hrp.Position).Unit
+        local goal = hrp.Position + dir * flySpeed
+        if bp then
+            bp.Position = goal
+        end
+
+        local delta = hrp.Position - nape.Position
+        local horizontalDist = Vector3.new(delta.X, 0, delta.Z).Magnitude
+        if horizontalDist < 8 then
+            diveAndKill(nape)
+        end
+    elseif bp then
+        bp.Position = hrp.Position
+    end
+end)
+
+-- ✅ التوقل داخل تبويب Safe Features
+Tabs.SafeFeatures:AddToggle("AutoKillSafe", {
+    Title = "Auto Kill Titans ( Safe )",
+    Default = false,
+    Callback = function(state)
+        flying = state
+        if state then
+            bp = Instance.new("BodyPosition")
+            bp.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+            bp.P = 40000
+            bp.D = 1000
+            bp.Position = hrp.Position
+            bp.Name = "FlyControl"
+            bp.Parent = hrp
+        else
+            if bp and bp.Parent then
+                bp:Destroy()
+                bp = nil
+            end
+        end
+    end
+})
+
+
+
+
+
+--//==============================\\--
+--||        👑 Auto Hook           ||--
+--\\==============================//--
+
+-- Auto E & Q Hold Script - Ready for Integration
+
+local VIM = game:GetService("VirtualInputManager")
+
+-- متغير التحكم (سيتم ربطه بالـ Toggle)
+local autoHookEnabled = false
+
+-- إعدادات السكريبت
+local HOLD_DURATION = 2    -- مدة الضغط بالثواني
+local CYCLE_DELAY = 0.1    -- تأخير بين الدورات
+
+-- دالة للضغط المستمر على مفتاح
+local function holdKey(keyCode, duration)
+    VIM:SendKeyEvent(true, keyCode, false, game)
+    task.wait(duration)
+    VIM:SendKeyEvent(false, keyCode, false, game)
+end
+
+-- دالة الدورة الكاملة
+local function fullCycle()
+    if not autoHookEnabled then return end -- فحص إضافي للأمان
+    
+    -- ضغط E لمدة ثانيتين (مرتين)
+    holdKey(Enum.KeyCode.E, HOLD_DURATION)
+    if not autoHookEnabled then return end -- فحص بين العمليات
+    
+    task.wait(0.1)
+    holdKey(Enum.KeyCode.E, HOLD_DURATION)
+    if not autoHookEnabled then return end
+    
+    task.wait(0.2) -- تأخير بين E و Q
+    
+    -- ضغط Q لمدة ثانيتين
+    holdKey(Enum.KeyCode.Q, HOLD_DURATION)
+end
+
+-- الحلقة الرئيسية
+local autoHookLoop = task.spawn(function()
+    while true do
+        if autoHookEnabled then
+            fullCycle()
+            task.wait(CYCLE_DELAY)
+        else
+            task.wait(0.5)
+        end
+    end
+end)
+
+-- إضافة الـ Toggle للـ GUI (ضع هذا في مكان الـ Tabs بتاعك)
+local AutoHookToggle = Tabs.SafeFeatures:AddToggle("AutoHook", {
+    Title = "Auto Hook",
+    Description = "Automatically holds E and Q keys for fishing",
+    Default = false,
+    Callback = function(state)
+        autoHookEnabled = state
+    end
+})
+
+-- دالة لإيقاف السكريبت تماماً (اختياري)
+local function stopAutoHook()
+    autoHookEnabled = false
+    if autoHookLoop then
+        task.cancel(autoHookLoop)
+    end
+end
+
+-- تصدير المتغيرات والدوال للاستخدام الخارجي (اختياري)
+getgenv().AutoHook = {
+    enabled = autoHookEnabled,
+    toggle = AutoHookToggle,
+    stop = stopAutoHook
+}
+
+
+
+
+
+
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+SaveManager:LoadAutoloadConfig()
